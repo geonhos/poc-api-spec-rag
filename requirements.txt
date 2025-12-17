@@ -1,0 +1,15 @@
+# Core dependencies
+anthropic>=0.18.0
+chromadb>=0.4.0
+openai>=1.0.0
+pydantic>=2.0.0
+click>=8.0.0
+httpx>=0.25.0
+pyyaml>=6.0.0
+
+# Development tools
+pytest>=7.0.0
+black>=23.0.0
+flake8>=6.0.0
+mypy>=1.0.0
+pytest-cov>=4.0.0

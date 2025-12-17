@@ -1,0 +1,38 @@
+[tool.poetry]
+name = "poc-api-spec-rag"
+version = "0.1.0"
+description = "RAG-based API specification assistant that generates accurate cURL and request examples from OpenAPI documents."
+authors = ["Your Name <your.email@example.com>"]
+license = "MIT"
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "^3.9"
+anthropic = "^0.18.0"
+chromadb = "^0.4.0"
+openai = "^1.0.0"
+pydantic = "^2.0.0"
+click = "^8.0.0"
+httpx = "^0.25.0"
+pyyaml = "^6.0.0"
+
+[tool.poetry.dev-dependencies]
+pytest = "^7.0.0"
+black = "^23.0.0"
+flake8 = "^6.0.0"
+mypy = "^1.0.0"
+pytest-cov = "^4.0.0"
+
+[build-system]
+requires = ["poetry-core>=1.0.0"]
+build-backend = "poetry.core.masonry.api"
+
+[tool.black]
+line-length = 100
+target-version = ['py39']
+
+[tool.mypy]
+python_version = "3.9"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = true

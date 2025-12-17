@@ -1,0 +1,16 @@
+{
+  "permissions": {
+    "allow": [
+      "*"
+    ],
+    "deny": []
+  },
+  "environment": {
+    "PYTHONPATH": "${CLAUDE_PROJECT_DIR}/src"
+  },
+  "preferredModel": "sonnet",
+  "thinking": {
+    "enabled": true
+  },
+  "verbose": false
+}
