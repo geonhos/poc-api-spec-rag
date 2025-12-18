@@ -2,8 +2,10 @@
 
 from .query_processor import QueryProcessor
 from .vector_search import VectorSearcher
+from .reranker import LLMReranker
 
 __all__ = [
     "QueryProcessor",
     "VectorSearcher",
+    "LLMReranker",
 ]
