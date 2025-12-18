@@ -25,6 +25,8 @@ def ingest(spec_file: str, force: bool):
         $ python -m src.main ingest ./specs/payment-api.yaml
         $ python -m src.main ingest ./specs/user-api.json --force
     """
+    from src.ingestion import OpenAPIParser, EndpointChunker, OllamaEmbedder, ChromaIndexer
+
     click.echo(f"📥 Ingesting OpenAPI spec: {spec_file}")
 
     spec_path = Path(spec_file)
@@ -32,10 +34,49 @@ def ingest(spec_file: str, force: bool):
     if force:
         click.echo("⚠️  Force mode: 기존 데이터를 덮어씁니다")
 
-    # TODO: Phase 1에서 구현
-    click.echo("❌ Not implemented yet (Phase 1)")
-    click.echo(f"   Spec file: {spec_path.absolute()}")
-    click.echo(f"   Target DB: {settings.CHROMA_DB_DIR}")
+    try:
+        # 1. OpenAPI 파싱
+        click.echo("\n[1/4] Parsing OpenAPI spec...")
+        parser = OpenAPIParser()
+        spec = parser.parse_file(spec_path)
+        parser.validate_spec(spec)
+        click.echo(f"✅ Parsed: {len(spec.paths)} paths")
+
+        # 2. 엔드포인트 청킹
+        click.echo("\n[2/4] Chunking endpoints...")
+        chunker = EndpointChunker()
+        chunks = chunker.chunk_spec(spec)
+        click.echo(f"✅ Created {len(chunks)} chunks")
+
+        # 3. 임베딩 생성
+        click.echo("\n[3/4] Generating embeddings...")
+        embedder = OllamaEmbedder()
+
+        # 임베딩 차원 확인
+        dim = embedder.get_embedding_dimension()
+        click.echo(f"   Embedding model: {embedder.model} ({dim} dim)")
+
+        # 배치 임베딩 생성
+        embeddings = embedder.embed_chunks(chunks)
+        click.echo(f"✅ Generated {len(embeddings)} embeddings")
+
+        # 4. ChromaDB 저장
+        click.echo("\n[4/4] Indexing to ChromaDB...")
+        indexer = ChromaIndexer(reset=force)
+        indexer.index_chunks(chunks, embeddings)
+
+        # 저장 결과 확인
+        info = indexer.get_collection_info()
+        click.echo(f"✅ Indexed to collection: {info['name']}")
+        click.echo(f"   Total documents: {info['count']}")
+
+        click.echo("\n" + "=" * 60)
+        click.echo("✅ Ingestion completed successfully!")
+        click.echo("=" * 60)
+
+    except Exception as e:
+        click.echo(f"\n❌ Ingestion failed: {e}", err=True)
+        raise click.Abort()
 
 
 @cli.command()
