@@ -37,3 +37,10 @@ Thumbs.db
 
 # Claude
 .claude/local_settings.json
+
+# Data (runtime)
+data/chroma_db/
+data/cache/
+
+# Keep specs directory but ignore specific files if needed
+# !data/specs/
