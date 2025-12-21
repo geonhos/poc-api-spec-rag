@@ -11,6 +11,7 @@ OpenAPI 명세서에서 자연어 질의로 정확한 cURL 명령어를 생성�
 - **Zero Hallucination**: 명세서에 없는 내용은 절대 추측하지 않음
 - **LLM Reranking**: 벡터 검색 결과를 LLM으로 재정렬하여 90%+ 정확도 달성
 - **검증 파이프라인**: cURL 문법 검증 + 명세서 준수 확인 + 신뢰도 점수
+- **실제 API 지원**: GitHub 등 대규모 OpenAPI 스펙 지원 ($ref resolver)
 - **한국어 지원**: 한국어 질의로 자연스럽게 API 탐색
 
 ## 아키텍처
@@ -314,6 +315,8 @@ poc-api-spec-rag/
 
 ## 성능
 
+### 샘플 API (3 endpoints)
+
 | 메트릭 | 결과 |
 |--------|------|
 | Retrieval 정확도 | 100% (3/3 테스트) |
@@ -326,6 +329,22 @@ poc-api-spec-rag/
 1. "결제 승인" → `POST /api/v1/payment/approve` ✅
 2. "결제 취소" → `DELETE /api/v1/payment/cancel` ✅
 3. "결제 상태 조회" → `GET /api/v1/payment/status/{payment_id}` ✅
+
+### GitHub API (1,088 endpoints)
+
+| 메트릭 | 결과 |
+|--------|------|
+| 인제스트 성공률 | 100% (1,088/1,088 endpoints) |
+| Retrieval 정확도 | 100% (3/3 쿼리) |
+| Generation 성공률 | 67% (2/3 쿼리, GET 요청) |
+| 평균 신뢰도 | HIGH (0.90) |
+
+**테스트 질의:**
+1. "list repositories" → `GET /repositories` (confidence: 0.90) ✅
+2. "get user information" → `GET /users/{username}` ✅
+3. "create repository" → POST 검색 성공, 생성 실패 (복잡한 request body) ⚠️
+
+자세한 결과: [docs/REAL_API_TESTS.md](docs/REAL_API_TESTS.md)
 
 ## 개발 가이드
 

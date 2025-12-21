@@ -309,8 +309,27 @@ poc-api-spec-rag/
   - With --validate: 신뢰도 HIGH (0.82) ✅
 - Commit: eed0b91 (CLI), 9c727ee (README)
 
-### Phase 6: 향후 개선 (계획)
-- [ ] 실제 대규모 API 명세서 테스트 (GitHub, Stripe API)
+### Phase 6: 실제 API 지원 및 개선 🔄
+
+**$ref Resolver 구현 (완료)**
+- [x] prance 라이브러리 통합
+- [x] ResolvingParser로 $ref 자동 해석
+- [x] openapi-spec-validator backend 사용
+
+**실제 API 테스트 (완료)**
+- [x] GitHub API (1,088 endpoints) 인제스트 성공
+- [x] GET 요청 테스트 성공 (list repositories, get user)
+- [x] POST 요청 테스트 (부분 성공 - request body 개선 필요)
+
+**인수 기준**: ✅ PASS - GitHub API 인제스트 및 쿼리 성공
+- Ingestion: 723 paths → 1,088 chunks ✅
+- Query "list repositories": HIGH (0.90) ✅
+- Query "get user": 성공 ✅
+- Commit: 88a36d4
+
+**향후 개선 (계획)**
+- [ ] Request body 스키마 파싱 개선 (POST/PUT 성공률 향상)
+- [ ] 다국어 임베딩 모델 테스트 (한국어 쿼리 지원)
 - [ ] 대화형 모드 (Multi-turn conversation)
 - [ ] 웹 UI (Streamlit/Gradio)
 - [ ] Docker 컨테이너화
