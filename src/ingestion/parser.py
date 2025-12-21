@@ -5,6 +5,8 @@ import json
 from pathlib import Path
 from typing import Union, Dict, Any
 
+from prance import ResolvingParser
+
 from src.core.models import OpenAPISpec
 from src.core.exceptions import SpecParsingError
 
@@ -13,13 +15,13 @@ class OpenAPIParser:
     """OpenAPI 명세서 파서 (YAML/JSON)"""
 
     def parse_file(self, file_path: Union[str, Path]) -> OpenAPISpec:
-        """파일에서 OpenAPI 명세서 파싱
+        """파일에서 OpenAPI 명세서 파싱 ($ref 자동 해석)
 
         Args:
             file_path: OpenAPI 명세서 파일 경로 (.yaml, .yml, .json)
 
         Returns:
-            OpenAPISpec: 파싱된 명세서
+            OpenAPISpec: 파싱된 명세서 ($ref 해석 완료)
 
         Raises:
             SpecParsingError: 파싱 실패 시
@@ -30,8 +32,12 @@ class OpenAPIParser:
             raise SpecParsingError(f"File not found: {file_path}")
 
         try:
-            content = file_path.read_text(encoding="utf-8")
-            return self.parse_string(content, file_path.suffix)
+            # prance로 $ref 자동 해석
+            parser = ResolvingParser(str(file_path), backend="openapi-spec-validator")
+            resolved_spec = parser.specification
+
+            # 이미 $ref가 해석된 dict를 Pydantic으로 파싱
+            return self.parse_dict(resolved_spec)
         except Exception as e:
             raise SpecParsingError(f"Failed to read file {file_path}: {e}")
 

@@ -44,3 +44,4 @@ data/cache/
 
 # Keep specs directory but ignore specific files if needed
 # !data/specs/
+data/specs/real/
