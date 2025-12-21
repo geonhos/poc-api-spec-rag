@@ -83,25 +83,164 @@ def ingest(spec_file: str, force: bool):
 @click.argument("query")
 @click.option("--top-k", default=5, help="검색할 엔드포인트 개수")
 @click.option("--verbose", "-v", is_flag=True, help="상세 출력")
-def query(query: str, top_k: int, verbose: bool):
+@click.option("--validate", is_flag=True, help="검증 활성화")
+def query(query: str, top_k: int, verbose: bool, validate: bool):
     """자연어 질의로 cURL 명령어를 생성합니다.
 
     Examples:
         $ python -m src.main query "결제 승인 API curl 만들어줘"
         $ python -m src.main query "사용자 정보 조회" --top-k 3 --verbose
+        $ python -m src.main query "결제 승인" --validate
     """
+    from src.retrieval import QueryProcessor, VectorSearcher, LLMReranker
+    from src.generation import PromptBuilder, OllamaLLMClient, OutputParser
+    from src.validation import CurlValidator, SpecValidator, ConfidenceScorer
+
     click.echo(f"🔍 Query: {query}")
-    click.echo(f"📊 Top-K: {top_k}")
 
     if verbose:
         click.echo(f"\n설정:")
         click.echo(f"  - Embedding model: {settings.OLLAMA_EMBEDDING_MODEL}")
         click.echo(f"  - LLM model: {settings.OLLAMA_LLM_MODEL}")
+        click.echo(f"  - Top-K: {top_k}")
         click.echo(f"  - Similarity threshold: {settings.SIMILARITY_THRESHOLD}")
 
-    # TODO: Phase 2-4에서 구현
-    click.echo("\n❌ Not implemented yet (Phase 2-4)")
-    click.echo("   Pipeline: Query → Retrieval → Generation → Validation")
+    try:
+        # [1/4] Retrieval Pipeline
+        click.echo("\n[1/4] Retrieval Pipeline...")
+        processor = QueryProcessor()
+        searcher = VectorSearcher()
+        reranker = LLMReranker()
+
+        # 질의 처리
+        query_req = processor.process_query(query, top_k=top_k)
+        if verbose:
+            click.echo(f"  - Filters: {query_req.filters}")
+
+        # 임베딩 생성
+        query_embedding = processor.embed_query(query)
+
+        # 벡터 검색
+        retrieval_resp = searcher.search(query_embedding, query_req)
+        if not retrieval_resp.results:
+            click.echo("❌ 관련 엔드포인트를 찾지 못했습니다")
+            return
+
+        if verbose:
+            click.echo(f"  - Found {len(retrieval_resp.results)} endpoints")
+
+        # LLM 재정렬
+        reranked_results = reranker.rerank(query, retrieval_resp.results, top_n=1)
+        top_result = reranked_results[0]
+
+        if verbose:
+            click.echo(f"  - Top result: {top_result.chunk.metadata.method} {top_result.chunk.metadata.endpoint}")
+            click.echo(f"  - Similarity: {top_result.similarity_score:.3f}")
+
+        # [2/4] Generation Pipeline
+        click.echo("\n[2/4] Generation Pipeline...")
+        builder = PromptBuilder()
+        llm = OllamaLLMClient()
+        parser = OutputParser()
+
+        # 프롬프트 구성
+        gen_req = builder.build_prompt(query, [top_result.chunk])
+        user_prompt = builder._build_user_prompt(gen_req.query, gen_req.retrieved_chunks)
+
+        # LLM 생성
+        if verbose:
+            click.echo(f"  - Calling {settings.OLLAMA_LLM_MODEL}...")
+        llm_output = llm.generate(gen_req.system_prompt, user_prompt)
+
+        # 출력 파싱
+        source_endpoint = f"{top_result.chunk.metadata.method} {top_result.chunk.metadata.endpoint}"
+        gen_resp = parser.parse_curl_response(llm_output, source_endpoint)
+
+        if not gen_resp.curl_command.command:
+            click.echo("\n❌ cURL 생성 실패")
+            if gen_resp.curl_command.explanation:
+                click.echo(f"사유: {gen_resp.curl_command.explanation}")
+            if gen_resp.warnings:
+                click.echo("\n⚠️  경고:")
+                for warn in gen_resp.warnings:
+                    click.echo(f"  - {warn}")
+            return
+
+        # [3/4] Validation Pipeline (옵션)
+        confidence = None
+        if validate:
+            click.echo("\n[3/4] Validation Pipeline...")
+            curl_val = CurlValidator()
+            spec_val = SpecValidator()
+            scorer = ConfidenceScorer()
+
+            # cURL 문법 검증
+            syntax_valid, syntax_errors = curl_val.validate(gen_resp.curl_command.command)
+            if verbose and syntax_errors:
+                click.echo(f"  - Syntax errors: {syntax_errors}")
+
+            # 명세 준수 검증
+            curl_components = curl_val.get_curl_components(gen_resp.curl_command.command)
+            spec_valid, spec_warnings, spec_completeness = spec_val.validate(
+                curl_components, top_result.chunk
+            )
+
+            if verbose and spec_warnings:
+                click.echo(f"  - Spec warnings: {spec_warnings}")
+
+            # 신뢰도 계산
+            confidence = scorer.calculate_score(
+                similarity=top_result.similarity_score,
+                spec_completeness=spec_completeness,
+                syntax_valid=syntax_valid,
+                spec_valid=spec_valid,
+            )
+
+            if verbose:
+                click.echo(f"  - Confidence: {confidence.level} ({confidence.overall:.2f})")
+
+        # [4/4] 결과 출력
+        click.echo("\n" + "=" * 60)
+        click.echo("생성된 cURL:")
+        click.echo("=" * 60)
+        click.echo(gen_resp.curl_command.command)
+
+        if gen_resp.curl_command.explanation:
+            click.echo(f"\n설명:")
+            click.echo(gen_resp.curl_command.explanation)
+
+        if gen_resp.curl_command.required_params:
+            click.echo(f"\n필수 입력:")
+            for param in gen_resp.curl_command.required_params:
+                click.echo(f"  - {param}")
+
+        if gen_resp.curl_command.expected_responses:
+            click.echo(f"\n예상 응답:")
+            for code, desc in gen_resp.curl_command.expected_responses.items():
+                click.echo(f"  - {code}: {desc}")
+
+        # 신뢰도 표시 (--validate 옵션)
+        if confidence:
+            click.echo(f"\n신뢰도: {confidence.level.upper()}")
+            click.echo(f"  - 전체 점수: {confidence.overall:.2f}")
+            click.echo(f"  - 검색 유사도: {confidence.similarity:.2f}")
+            click.echo(f"  - 명세 완성도: {confidence.spec_completeness:.2f}")
+            click.echo(f"  - 검증 통과: {'예' if confidence.validation_passed else '아니오'}")
+
+        # 경고 메시지
+        if gen_resp.warnings:
+            click.echo("\n⚠️  경고:")
+            for warn in gen_resp.warnings:
+                click.echo(f"  - {warn}")
+
+        click.echo("\n" + "=" * 60)
+
+    except Exception as e:
+        click.echo(f"\n❌ Query failed: {e}", err=True)
+        if verbose:
+            import traceback
+            click.echo(traceback.format_exc(), err=True)
+        raise click.Abort()
 
 
 @cli.command()
